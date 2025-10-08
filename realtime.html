@@ -1,0 +1,615 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>RTL-3D — Real-Time Monitoring System</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="RTL-3D KILAT" />
+	<meta name="keywords" content="Real-Time Lightning 3D Imaging and Forecasting Project for Sustainable and Reliable Supply of Energy and Storm Disaster Early Warning" />
+	<meta name="author" content="rtlsatreps.utem.edu.my" />
+	<meta http-equiv="refresh" content="600">
+
+	<style>
+		body { font-family: Arial, sans-serif; text-align: center; padding-top: 40px; }
+		img { max-width: 90%; height: auto; border: 2px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+		#datetime { font-size: 1.2em; margin-bottom: 20px; color: #555; }
+		h2 { margin-top: 40px; margin-bottom: 20px; }
+
+		/* Blinking Red Effect for Offline Marker */
+		.blink-red { animation: blinker 1s linear infinite; }
+		@keyframes blinker { 50% { opacity: 0; } }
+
+		/* unified strike icon style (used for both X and *) */
+		.strike-icon div { font-size: 24px; font-weight: bold; text-shadow: 0 0 2px white; }
+
+		/* Overlay controls */
+		#overlayControls{
+			display:flex; gap:10px; align-items:center; justify-content:center;
+			margin:10px 0 5px 0; flex-wrap:wrap;
+		}
+		#overlayControls input[type="range"]{ width:180px; }
+		#overlayControls label{ font-size:13px; color:#444; }
+		#overlayBounds{
+			display:flex; gap:6px; align-items:center; justify-content:center;
+			flex-wrap:wrap; font-size:12px; margin-bottom:8px;
+		}
+		#overlayBounds input{
+			width:95px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; text-align:right;
+		}
+		.calHandle{
+			background:#fff; border:2px solid #d33; border-radius:4px;
+			width:14px; height:14px; box-shadow:0 1px 3px rgba(0,0,0,.5);
+		}
+	</style>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+	<!-- Leaflet CSS & JS -->
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+	<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+
+	<link href="https://fonts.googleapis.com/css?family=Inconsolata:400,700" rel="stylesheet">
+	<link rel="stylesheet" href="css/animate.css">
+	<link rel="stylesheet" href="css/icomoon.css">
+	<link rel="stylesheet" href="css/bootstrap.css">
+	<link rel="stylesheet" href="css/flexslider.css">
+	<link rel="stylesheet" href="css/style.css">
+	<script src="js/modernizr-2.6.2.min.js"></script>
+</head>
+
+<body>
+<div class="fh5co-loader"></div>
+
+<div id="page">
+	<nav class="fh5co-nav" role="navigation">
+		<div class="top-menu">
+			<div class="container">
+				<div class="row">
+					<div class="col-xs-2">
+						<div id="fh5co-logo"><a href="index.html">RTL-3D<span>.</span></a></div>
+					</div>
+					<div class="col-xs-10 text-right menu-1">
+						<ul>
+							<li><a href="index.html">Home</a></li>
+							<li class="active"><a href="realtime.html">Real-time</a></li>
+							<li class="has-dropdown">
+								<a href="#">Monitor</a>
+								<ul class="dropdown">
+									<li><a href="monitor-trigger.html">Daily Trigger Statistics</a></li>
+									<li><a href="monitor-site-signal.html">Site-Recorded Waveform Output</a></li>
+									<li><a href="monitor-site-status.html">Site status</a></li>
+								</ul>
+							</li>
+							<li class="btn-cta"><a href="#"><span>Login</span></a></li>
+						</ul>
+					</div>
+				</div>	
+			</div>
+		</div>
+	</nav>
+
+	<h2>Lightning real-time monitoring by RTL-3D Kilat sensors</h2>
+	<h4>Current time <div id="datetime"></div></h4>
+
+	<script>
+	function updateDateTimeGMT8() {
+		const nowUTC = new Date();
+		const utcTime = nowUTC.getTime() + (nowUTC.getTimezoneOffset() * 60000);
+		const gmt8 = new Date(utcTime + 8 * 60 * 60 * 1000);
+		const options = { weekday:'long', year:'numeric', month:'long', day:'numeric',
+						  hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false };
+		const formatted = gmt8.toLocaleString('en-GB', options);
+		document.getElementById('datetime').innerHTML = `${formatted} GMT+8`;
+	}
+	updateDateTimeGMT8();
+	setInterval(updateDateTimeGMT8, 1000);
+	</script>
+
+	<!-- MAP ONLY (panels moved off-page) -->
+	<div id="mapWrap" style="margin:0 auto; padding:20px; width:90vw; max-width:1400px;">
+		<div id="overlayBounds" style="display:none">
+			<label>SW Lat <input id="swLat" type="number" step="0.0001" value="-1.2963"></label>
+			<label>SW Lng <input id="swLng" type="number" step="0.0001" value="96.9434"></label>
+			<label>NE Lat <input id="neLat" type="number" step="0.0001" value="8.8851"></label>
+			<label>NE Lng <input id="neLng" type="number" step="0.0001" value="106.0620"></label>
+			<button id="applyBounds">Apply Bounds</button>
+			<button id="fitBounds">Fit Map</button>
+			<label><input type="checkbox" id="calibrateToggle"> Calibrate (drag corners)</label>
+			<input type="text" id="overlayURL" placeholder="http(s) URL to PNG (optional)" style="width:260px; padding:6px;">
+			<button id="loadURL">Load URL</button>
+		</div>
+
+		<div id="overlayControls">
+			<input type="file" id="overlayFile" accept="image/png" />
+			<button id="toggleOverlay" disabled>Show/Hide CappiRadar</button>
+			<label>Opacity <input type="range" id="overlayOpacity" min="0" max="1" step="0.05" value="0.7"></label>
+		</div>
+
+		<div id="map" style="width:90vw; max-width:1400px; height:70vh; border:2px solid #ccc; box-shadow:0 0 10px rgba(0,0,0,0.2);"></div>
+	</div>
+
+	<script>
+	// ---------- CONFIG for danger zones (tweak as needed) ----------
+	const RECENT_WINDOW_MS  = 60000;   // look back this long (matches strike lifetime)
+	const GRID_KM           = 15;      // grid cell size for clustering (~15 km)
+	const DANGER_THRESHOLD  = 15;      // min strikes in a cell to flag as danger
+	const BASE_RADIUS_M     = 5000;    // base circle radius
+	const MAX_RADIUS_M      = 20000;   // max circle radius
+	const RADIUS_STEP_M     = 1000;    // extra radius per strike beyond threshold
+
+	// Initialize Map
+	var map = L.map('map').setView([2.647, 102.041], 9);
+
+	// Base layer
+	L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		maxZoom: 18,
+		attribution: 'Lightning real-time data © RTL-3D Kilat | Map data © OpenStreetMap contributors'
+	}).addTo(map);
+
+	/* ===== Overlay layers ===== */
+	const cgLayer      = L.layerGroup().addTo(map);   // Cloud-to-Ground (X)
+	const icLayer      = L.layerGroup().addTo(map);   // Intra-cloud (*)
+	const dangerLayer  = L.layerGroup().addTo(map);   // Danger zones (red halos)
+
+	const overlays = {
+		'Cloud-to-Ground (&#9675)' : cgLayer,
+		'Intra-Cloud (&#8314)'     : icLayer,
+		'Danger zone (red)'        : dangerLayer
+	};
+	L.control.layers(null, overlays, { collapsed: false, position: 'topright' }).addTo(map);
+
+	/* ===== Legend ===== */
+	const legend = L.control({ position: 'bottomright' });
+	legend.onAdd = function () {
+	  const div = L.DomUtil.create('div', 'info legend');
+	  div.style.background = 'rgba(255,255,255,0.95)';
+	  div.style.padding = '6px 8px';
+	  div.style.border = '1px solid #ccc';
+	  div.style.borderRadius = '4px';
+	  div.style.boxShadow = '0 1px 4px rgba(0,0,0,.2)';
+	  div.innerHTML = `
+		<div style="font-weight:700; margin-bottom:4px;">Legend</div>
+		<div style="line-height:1.2;"><span style="font-size:6px; font-weight:700;">&#9675</span> — Cloud-to-Ground</div>
+		<div style="line-height:1.2;"><span style="font-size:6px; font-weight:700;">&#8314</span> — Intra-Cloud</div>
+		<div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
+		  <span style="width:5px; height:14px; border-radius:50%; background:rgba(255,0,0,0.25); border:1px solid #b30000; display:inline-block;"></span>
+		  <span>Danger zone (recent high density)</span>
+		</div>
+		<hr style="margin:6px 0;">
+		<div style="font-size:5px; color:#555;">Marker color = time (see colorbar)</div>
+	  `;
+	  return div;
+	};
+	legend.addTo(map);
+
+	// Ensure Leaflet recalculates after layout/size changes
+	window.addEventListener('load', () => {
+		if (map && map.invalidateSize) setTimeout(() => map.invalidateSize(), 0);
+	});
+
+	// ---------- PNG Overlay Controls + Calibration ----------
+	let overlayLayer = null;
+	let swMarker = null, neMarker = null, rect = null;
+
+	function readBoundsFromInputs(){
+		const swLat = parseFloat(document.getElementById('swLat').value);
+		const swLng = parseFloat(document.getElementById('swLng').value);
+		const neLat = parseFloat(document.getElementById('neLat').value);
+		const neLng = parseFloat(document.getElementById('neLng').value);
+		return L.latLngBounds([swLat, swLng], [neLat, neLng]);
+	}
+	function writeBoundsToInputs(bounds){
+		const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+		document.getElementById('swLat').value = sw.lat.toFixed(4);
+		document.getElementById('swLng').value = sw.lng.toFixed(4);
+		document.getElementById('neLat').value = ne.lat.toFixed(4);
+		document.getElementById('neLng').value = ne.lng.toFixed(4);
+	}
+	function loadOverlayFromURL(url){
+		const bounds = readBoundsFromInputs();
+		if (overlayLayer) { map.removeLayer(overlayLayer); }
+		overlayLayer = L.imageOverlay(url, bounds, {
+			opacity: parseFloat(document.getElementById('overlayOpacity').value),
+			zIndex: 400
+		}).addTo(map);
+		document.getElementById('toggleOverlay').disabled = false;
+		if (document.getElementById('calibrateToggle').checked) startCalibration();
+	}
+	document.getElementById('overlayFile').addEventListener('change', (e) => {
+		const f = e.target.files && e.target.files[0];
+		if (!f) return;
+		const url = URL.createObjectURL(f);
+		loadOverlayFromURL(url);
+	});
+	document.getElementById('loadURL').addEventListener('click', () => {
+		const url = document.getElementById('overlayURL').value.trim();
+		if (url) loadOverlayFromURL(url);
+	});
+	document.getElementById('toggleOverlay').addEventListener('click', () => {
+		if (!overlayLayer) return;
+		if (map.hasLayer(overlayLayer)) map.removeLayer(overlayLayer);
+		else overlayLayer.addTo(map);
+	});
+	document.getElementById('overlayOpacity').addEventListener('input', () => {
+		if (overlayLayer) overlayLayer.setOpacity(parseFloat(document.getElementById('overlayOpacity').value));
+	});
+	document.getElementById('applyBounds').addEventListener('click', () => {
+		if (!overlayLayer) return;
+		const b = readBoundsFromInputs();
+		overlayLayer.setBounds(b);
+		if (rect) rect.setBounds(b);
+		if (swMarker && neMarker){
+			swMarker.setLatLng(b.getSouthWest());
+			neMarker.setLatLng(b.getNorthEast());
+		}
+	});
+	document.getElementById('fitBounds').addEventListener('click', () => {
+		map.fitBounds(readBoundsFromInputs());
+	});
+	document.getElementById('calibrateToggle').addEventListener('change', (e) => {
+		if (e.target.checked) startCalibration();
+		else stopCalibration();
+	});
+	function startCalibration(){
+		if (!overlayLayer){
+			alert('Load an overlay PNG first.'); 
+			document.getElementById('calibrateToggle').checked = false;
+			return;
+		}
+		stopCalibration();
+		const b = overlayLayer.getBounds();
+		const sw = b.getSouthWest(), ne = b.getNorthEast();
+		rect = L.rectangle(b, {color:'#d33', weight:1, dashArray:'4,3', fill:false}).addTo(map);
+		const handleIcon = L.divIcon({className:'calHandle'});
+		swMarker = L.marker(sw, {draggable:true, icon:handleIcon}).addTo(map);
+		neMarker = L.marker(ne, {draggable:true, icon:handleIcon}).addTo(map);
+		const onDrag = () => {
+			const swLL = swMarker.getLatLng();
+			const neLL = neMarker.getLatLng();
+			const south = Math.min(swLL.lat, neLL.lat);
+			const west  = Math.min(swLL.lng, neLL.lng);
+			const north = Math.max(swLL.lat, neLL.lat);
+			const east  = Math.max(swLL.lng, neLL.lng);
+			const nb = L.latLngBounds([south, west], [north, east]);
+			overlayLayer.setBounds(nb);
+			if (rect) rect.setBounds(nb);
+			writeBoundsToInputs(nb);
+		};
+		swMarker.on('drag', onDrag);
+		neMarker.on('drag', onDrag);
+	}
+	function stopCalibration(){
+		if (swMarker){ map.removeLayer(swMarker); swMarker = null; }
+		if (neMarker){ map.removeLayer(neMarker); neMarker = null; }
+		if (rect){ map.removeLayer(rect); rect = null; }
+	}
+
+	// ---------- Sensors ----------
+	const sensors = [
+		{ name: "UNITEN (UTNL)", lat: 2.969383333, lng: 101.7287567, status: 'online' },
+		{ name: "Batu Dam (DAML)", lat: 3.275995, lng: 101.6843683, status: 'online' },
+		{ name: "Padang Jawa (PJWL)", lat: 3.04578, lng: 101.4913467, status: 'online' },
+		{ name: "Kolej Uniti (KUTL)", lat: 2.404219, lng: 101.96472, status: 'online' },
+		{ name: "Falak (FLKL)", lat: 2.293866, lng: 102.083391, status: 'online' },
+		{ name: "UiTM Jasin (UJSL)", lat: 2.228043333, lng: 102.458225, status: 'online' },
+		{ name: "UTeM (UTML)", lat: 2.314033, lng: 102.318507, status: 'online' },
+		{ name: "Met Kuala Pilah (MKPL)", lat: 2.7268861, lng: 102.2489194, status: 'online' },
+		{ name: "MCORP (PBSL)", lat: 2.113184, lng: 102.330978, status: 'online' }
+	];
+	updateStationStatusPanel(sensors);
+	function updateStationStatusPanel(sensors) {
+		const stationListEl = document.getElementById('stationList');
+		const summaryEl = document.getElementById('stationStatusSummary');
+		if (!stationListEl || !summaryEl) return; // safety if panel removed
+		stationListEl.innerHTML = '';
+		let onlineCount = 0, offlineCount = 0;
+		sensors.forEach(sensor => {
+			const item = document.createElement('li');
+			item.style.display = 'flex';
+			item.style.alignItems = 'center';
+			item.style.marginBottom = '6px';
+			item.style.fontWeight = 'bold';
+			const statusCircle = document.createElement('span');
+			statusCircle.style.display = 'inline-block';
+			statusCircle.style.width = '10px';
+			statusCircle.style.height = '10px';
+			statusCircle.style.borderRadius = '50%';
+			statusCircle.style.marginRight = '8px';
+			statusCircle.style.backgroundColor = sensor.status === 'online' ? 'green' : 'red';
+			if (sensor.status === 'online') onlineCount++; else offlineCount++;
+			item.appendChild(statusCircle);
+			item.appendChild(document.createTextNode(sensor.name));
+			stationListEl.appendChild(item);
+		});
+		summaryEl.innerHTML = `Status: <span style="color:green">${onlineCount} Online</span>, <span style="color:red">${offlineCount} Offline</span>`;
+	}
+
+	// ---------- CSV Loading & plotting ----------
+	let globalMinTime = Infinity;
+	let globalMaxTime = -Infinity;
+	let fileList = [];
+
+	// Keep recent strikes for danger-zone detection
+	let recentStrikes = []; // { lat, lon, added }
+
+	function kmToDegLat(km){ return km / 111.0; }
+	function kmToDegLng(km, lat){ return km / (111.0 * Math.cos(lat * Math.PI / 180)); }
+
+	function addStrikeForDanger(lat, lon){
+		// record with "added" = now so it decays with display lifetime
+		recentStrikes.push({ lat, lon, added: Date.now() });
+	}
+
+	function recomputeDangerZones(){
+		const now = Date.now();
+		// drop old
+		recentStrikes = recentStrikes.filter(s => (now - s.added) <= RECENT_WINDOW_MS);
+		dangerLayer.clearLayers();
+		if (!recentStrikes.length) return;
+
+		const cells = new Map();
+		recentStrikes.forEach(s => {
+			const dLat = kmToDegLat(GRID_KM);
+			const dLng = kmToDegLng(GRID_KM, s.lat);
+			const i = Math.floor(s.lat / dLat);
+			const j = Math.floor(s.lon / dLng);
+			const key = i + ',' + j;
+			let cell = cells.get(key);
+			if (!cell) cell = { count: 0, sumLat: 0, sumLon: 0 };
+			cell.count++;
+			cell.sumLat += s.lat;
+			cell.sumLon += s.lon;
+			cells.set(key, cell);
+		});
+
+		cells.forEach(cell => {
+			if (cell.count >= DANGER_THRESHOLD){
+				const lat = cell.sumLat / cell.count;
+				const lon = cell.sumLon / cell.count;
+				const radius = Math.min(BASE_RADIUS_M + (cell.count - DANGER_THRESHOLD) * RADIUS_STEP_M, MAX_RADIUS_M);
+				L.circle([lat, lon], {
+					radius,
+					color: '#b30000',
+					weight: 1,
+					fillColor: '#ff0000',
+					fillOpacity: 0.18,
+					stroke: true
+				})
+				.bindTooltip(`⚠️ Danger zone<br>${cell.count} strikes in last ${Math.round(RECENT_WINDOW_MS/1000)}s`, {direction:'top'})
+				.addTo(dangerLayer);
+			}
+		});
+	}
+
+	// Periodically refresh danger zones so halos fade out as strikes age out
+	setInterval(recomputeDangerZones, 5000);
+
+	fetch('./Strike_locations/file-list.json')
+		.then(response => response.json())
+		.then(allCSVFiles => {
+			fileList = allCSVFiles.map(filename => {
+				const match = filename.match(/_(\d+\.\d+)\.dat_latlon\.csv$/);
+				const unixTime = match ? parseFloat(match[1]) : 0;
+				return { filename, unixTime };
+			}).sort((a, b) => a.unixTime - b.unixTime);
+
+			s.canAll = scanAllFilesForTimeRange(() => { loadNextFile(0); });
+			function s(){}
+		})
+		.catch(error => console.error("Failed to fetch file list:", error));
+
+	function scanAllFilesForTimeRange(callback) {
+		let filesProcessed = 0;
+		const fileListEl = document.getElementById('loadedFileList');
+		if (fileListEl) fileListEl.innerHTML = '';
+
+		fileList.forEach(f => {
+			Papa.parse(`./Strike_locations/${f.filename}`, {
+				download: true, header: true, delimiter: '\t',
+				complete: (results) => {
+					const data = results.data.filter(row => row['Latitude'] && row['Longitude'] && row['DateTime(GMT+8)']);
+					const timeStamps = data.map(d => {
+						const cleanTime = d['DateTime(GMT+8)'].split('.')[0];
+						return new Date(cleanTime).getTime();
+					});
+					if (timeStamps.length) {
+						globalMinTime = Math.min(globalMinTime, Math.min(...timeStamps));
+						globalMaxTime = Math.max(globalMaxTime, Math.max(...timeStamps));
+					}
+					if (++filesProcessed === fileList.length) callback();
+				},
+				error: () => { if (++filesProcessed === fileList.length) callback(); }
+			});
+		});
+	}
+
+	/* build a strike icon (X or *) in a given color */
+	function makeStrikeIcon(symbol, color) {
+	  return L.divIcon({
+		className: 'strike-icon',
+		html: `<div style="color:${color};">${symbol}</div>`,
+		iconSize: [20, 20],
+		iconAnchor: [10, 10]
+	  });
+	}
+
+	function loadNextFile(index) {
+		if (index >= fileList.length) return;
+
+		const { filename, unixTime } = fileList[index];
+		const filePath = `./Strike_locations/${filename}`;
+
+		const fileListEl = document.getElementById('loadedFileList');
+		const scrollContainer = document.getElementById('loadedFilesPanel');
+		if (fileListEl && scrollContainer) {
+			const listItem = document.createElement('li');
+			const date = new Date(unixTime * 1000 + 8 * 60 * 60 * 1000);
+			const formatted = date.toISOString().replace('T', ' ').slice(0, 19);
+			listItem.textContent = `${formatted} GMT+8`;
+			fileListEl.appendChild(listItem);
+			scrollContainer.scrollTop = scrollContainer.scrollHeight;
+		}
+
+		Papa.parse(filePath, {
+			download: true, header: true, delimiter: '\t',
+			complete: function (results) {
+				const data = results.data.filter(row => row['Latitude'] && row['Longitude'] && row['DateTime(GMT+8)']);
+				if (!data.length) { setTimeout(() => loadNextFile(index + 1), 2000); return; }
+
+				data.forEach((d) => {
+					const lat = parseFloat(d['Latitude']);
+					const lon = parseFloat(d['Longitude']);
+					const cleanTime = d['DateTime(GMT+8)'].split('.')[0];
+					const timeVal = new Date(cleanTime).getTime();
+					if (isNaN(lat) || isNaN(lon) || isNaN(timeVal)) return;
+
+					const color = getCustomColor(timeVal, globalMinTime, globalMaxTime);
+
+					// Randomly assign: ~10% CG (X), ~90% IC (*)
+					const isCG = Math.random() < 0.10;
+					const symbol = isCG ? '&#9675' : '&#8314';
+					const layer = isCG ? cgLayer : icLayer;
+
+					const marker = L.marker([lat, lon], { icon: makeStrikeIcon(symbol, color) })
+						.bindPopup(`⚡ Strike at ${cleanTime}<br>📍 Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`)
+						.addTo(layer);
+
+					// Track for danger-zone computation
+					addStrikeForDanger(lat, lon);
+
+					// Fade after 20s
+					setTimeout(() => {
+						const el = marker.getElement();
+						if (el) el.style.opacity = '0.3';
+					}, 20000);
+
+					// Remove after 60s from its overlay layer
+					setTimeout(() => {
+						layer.removeLayer(marker);
+					}, 60000);
+				});
+
+				// Recompute hotspots after each file batch
+				recomputeDangerZones();
+
+				setTimeout(() => loadNextFile(index + 1), 500);
+			},
+			error: () => setTimeout(() => loadNextFile(index + 1), 2000)
+		});
+	}
+
+	// Sensors on map
+	const sensorsList = [
+		{ name: "UNITEN (UTNL)", lat: 2.969383333, lng: 101.7287567, status: 'online' },
+		{ name: "Batu Dam (DAML)", lat: 3.275995, lng: 101.6843683, status: 'online' },
+		{ name: "Padang Jawa (PJWL)", lat: 3.04578, lng: 101.4913467, status: 'online' },
+		{ name: "Kolej Uniti (KUTL)", lat: 2.404219, lng: 101.96472, status: 'online' },
+		{ name: "Falak (FLKL)", lat: 2.293866, lng: 102.083391, status: 'online' },
+		{ name: "UiTM Jasin (UJSL)", lat: 2.228043333, lng: 102.458225, status: 'online' },
+		{ name: "UTeM (UTML)", lat: 2.314033, lng: 102.318507, status: 'online' },
+		{ name: "Met Kuala Pilah (MKPL)", lat: 2.7268861, lng: 102.2489194, status: 'online' },
+		{ name: "MCORP (PBSL)", lat: 2.113184, lng: 102.330978, status: 'online' }
+	];
+	sensorsList.forEach(sensor => {
+		if (sensor.status === 'online') {
+			L.circleMarker([sensor.lat, sensor.lng], {
+				radius: 5, color: 'black', fillColor: 'black', fillOpacity: 1
+			}).bindTooltip(sensor.name, { permanent: false, direction: 'top' }).addTo(map);
+		} else {
+			let offlineIcon = L.divIcon({
+				className: 'blink-red',
+				html: '<div style="width:10px; height:10px; background:red; border-radius:50%;"></div>',
+				iconSize: [10, 10]
+			});
+			L.marker([sensor.lat, sensor.lng], { icon: offlineIcon })
+			 .bindTooltip(sensor.name, { permanent: false, direction: 'top' }).addTo(map);
+		}
+	});
+
+	function getCustomColor(t, minTime, maxTime) {
+		const range = maxTime - minTime;
+		const f = range > 0 ? (t - minTime) / range : 0;
+		if (f <= 0.0) return '#000000';
+		else if (f <= 0.2) return '#0000ff';
+		else if (f <= 0.4) return '#006400';
+		else if (f <= 0.6) return '#7E4100';
+		else if (f <= 0.8) return '#ff0000';
+		else return '#ff00ff';
+	}
+	</script>
+
+	<div style="width: 50%; margin: auto; padding-bottom: 20px;">
+		<img src="colorbar_hour2.png" style="max-width: 90%;">
+	</div>
+
+	<!-- Radar Echo Section -->
+	<p></p>
+	<h3>Radar Echo <a href="https://www.met.gov.my/pencerapan/radar-semenanjung/" target="_blank">(MET MALAYSIA)</a></h3>
+	<div style="width: 50%; margin: auto; padding-bottom: 20px;">
+		<img src="https://www.met.gov.my/data/radar_peninsular.gif" alt="Radar Echo" style="width: 100%; border:2px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
+	</div>
+
+	<!-- Himawari Satellite Image -->
+	<h3>Himawari Satellite Image <a href="https://www.met.gov.my/pencerapan/semenanjung-malaysia/" target="_blank">(MET MALAYSIA)</a></h3>
+	<div style="width: 50%; margin: auto; padding-bottom: 20px;">
+		<img src="https://www.met.gov.my/data/PEN_IR.png" alt="Himawari Satellite" style="width: 100%; border:2px solid #ccc; box-shadow: 0 0 10px rgba(0,0,0,0.2);">
+	</div>
+
+	<footer id="fh5co-footer" role="contentinfo">
+		<div class="container">
+			<div class="row copyright">
+				<div class="col-md-12 text-center">
+					<p>
+						<small class="block">&copy;2025 <a href="https://rtlsatreps.utem.edu.my/" target="_blank"> RTL-3D KILAT</a>. All Rights Reserved.</small>
+						<small class="block">Designed by <a href="http://electrazcorp.com/?i=1" target="_blank">muhdhaziq.s</a></small>
+					</p>
+					<p>
+						<ul class="fh5co-social-icons">
+							<li><a href="https://www.instagram.com/satreps_rtl3d/"><i class="icon-instagram"></i></a></li>
+							<li><a href="https://www.facebook.com/rtl3d"><i class="icon-facebook"></i></a></li>
+						</ul>
+					</p>
+				</div>
+			</div>
+		</div>
+	</footer>
+</div>
+
+<!-- Offstage stash: keep panels for JS/data, don’t show them -->
+<div id="offstagePanels" hidden aria-hidden="true">
+	<!-- Station Info Panel -->
+	<div id="stationInfoPanel" style="
+		width: 200px; height: 600px; background: rgba(255, 255, 255, 0.95);
+		border: 1px solid #ccc; padding: 10px; border-radius: 6px;
+		box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-family: Arial, sans-serif;
+		font-size: 13px; overflow-y: auto;">
+		<b>📡 Station Network</b>
+		<div id="stationStatusSummary" style="margin: 10px 0; font-weight: bold;"></div>
+		<ul id="stationList" style="list-style: none; padding-left: 0;"></ul>
+	</div>
+
+	<!-- Loaded Files Panel -->
+	<div id="loadedFilesPanel" style="
+		width: 250px; height: 600px; background: rgba(255, 255, 255, 0.95);
+		border: 1px solid #ccc; padding: 10px; border-radius: 6px;
+		box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-family: Arial, sans-serif;
+		font-size: 13px; overflow-y: auto;">
+		<b>📂 Loaded Files</b>
+		<ul id="loadedFileList" style="margin: 5px 0 0; padding-left: 18px;"></ul>
+	</div>
+</div>
+
+<div class="gototop js-top">
+	<a href="#" class="js-gotop"><i class="icon-arrow-up22"></i></a>
+</div>
+
+<!-- jQuery & plugins -->
+<script src="js/jquery.min.js"></script>
+<script src="js/jquery.easing.1.3.js"></script>
+<script src="js/bootstrap.min.js"></script>
+<script src="js/jquery.waypoints.min.js"></script>
+<script src="js/jquery.flexslider-min.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
