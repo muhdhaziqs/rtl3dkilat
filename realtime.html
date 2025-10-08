@@ -44,6 +44,23 @@
 
 		/* ==== ADDED: gently reduce long-press/touch callouts on iOS (non-blocking) */
 		html { -webkit-touch-callout: none; }
+
+		/* Blinking dark red text (respects reduced-motion) */
+		.blink-darkred {
+		color: #8B0000;            /* dark red */
+		font-weight: 700;
+		animation: blinkFade 1.1s linear infinite;
+		}
+
+		@keyframes blinkFade {
+		50% { opacity: 0.25; }     /* quick dip to create a blink effect */
+		}
+
+		/* Accessibility: turn off blinking if user prefers reduced motion */
+		@media (prefers-reduced-motion: reduce) {
+		.blink-darkred { animation: none; }
+		}
+
 	</style>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -94,7 +111,11 @@
 
 	<h2>Lightning real-time monitoring by RTL-3D Kilat sensors</h2>
 	<h4>Current time <div id="datetime"></div></h4>
+	<h4 class="blink-darkred">
+  The data shown here are based on lightning detections recorded on 11 August 2025, from 1:00 a.m. to 5:00 a.m.
+	</h4>
 
+	
 	<script>
 	function updateDateTimeGMT8() {
 		const nowUTC = new Date();
