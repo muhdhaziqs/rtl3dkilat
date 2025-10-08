@@ -41,6 +41,9 @@
 			background:#fff; border:2px solid #d33; border-radius:4px;
 			width:14px; height:14px; box-shadow:0 1px 3px rgba(0,0,0,.5);
 		}
+
+		/* ==== ADDED: gently reduce long-press/touch callouts on iOS (non-blocking) */
+		html { -webkit-touch-callout: none; }
 	</style>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -611,5 +614,31 @@
 <script src="js/jquery.waypoints.min.js"></script>
 <script src="js/jquery.flexslider-min.js"></script>
 <script src="js/main.js"></script>
+
+<!-- ==== ADDED: Page-wide right-click/shortcut guard (scoped to this page only) -->
+<script>
+(function () {
+  // Block the native context menu everywhere EXCEPT typical text fields / editable areas
+  function blockContext(e) {
+    if (e.target.closest('input, textarea, [contenteditable="true"], [data-allow-context]')) return;
+    e.preventDefault();
+  }
+  document.addEventListener('contextmenu', blockContext, { capture: true });
+
+  // Optional: block a few common shortcuts. Remove keys you want to allow.
+  window.addEventListener('keydown', function (e) {
+    const k = (e.key || '').toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && ['s','u','p','c'].includes(k)) { e.preventDefault(); }
+    if (k === 'f12') { e.preventDefault(); }
+  }, true);
+
+  // Make images harder to drag-save
+  document.querySelectorAll('img').forEach(img => {
+    img.setAttribute('draggable', 'false');
+    img.style.webkitUserDrag = 'none';
+  });
+})();
+</script>
+<!-- ==== /ADDED -->
 </body>
 </html>
