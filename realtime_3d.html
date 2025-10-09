@@ -406,7 +406,7 @@
   // Server file list
   async function tryLoadFileList() {
     try {
-      const res = await fetch('/3D_txt/filelist.json', { cache: 'no-cache' });
+      const res = await fetch('./3D_txt/filelist.json', { cache: 'no-cache' });
       if (!res.ok) throw 0;
       const list = await res.json();
       serverFileSel.innerHTML = '';
