@@ -1,0 +1,457 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>RTL-3D — Real-Time Monitoring System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="RTL-3D KILAT" />
+  <meta name="keywords" content="Real-Time Lightning 3D Imaging and Forecasting Project" />
+  <meta name="author" content="rtlsatreps.utem.edu.my" />
+  <meta http-equiv="refresh" content="600" />
+
+  <!-- CesiumJS -->
+  <link href="https://unpkg.com/cesium/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://unpkg.com/cesium/Build/Cesium/Cesium.js"></script>
+
+  <!-- PapaParse (CSV) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Your existing styles/libs (optional) -->
+  <link href="https://fonts.googleapis.com/css?family=Inconsolata:400,700" rel="stylesheet">
+  <link rel="stylesheet" href="css/animate.css">
+  <link rel="stylesheet" href="css/icomoon.css">
+  <link rel="stylesheet" href="css/bootstrap.css">
+  <link rel="stylesheet" href="css/flexslider.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/modernizr-2.6.2.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #topbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:center; margin:16px 0 8px; }
+    #viewer { width:95%; height:78vh; margin:10px auto; border:2px solid #ccc; box-shadow:0 0 10px rgba(0,0,0,0.2); }
+    .badge { display:inline-block; padding:2px 6px; border-radius:4px; background:#eee; margin-left:6px; font-size:12px;}
+    .legend { text-align:center; margin:6px 0 16px; font-size:0.95em; }
+    .legend span { display:inline-block; margin:0 10px; }
+    .dot { width:10px; height:10px; display:inline-block; border-radius:50%; margin-right:6px; vertical-align:middle; }
+    .hint { text-align:center; color:#666; margin-top:6px; }
+    .btn { cursor:pointer; }
+    .origin-box { display:flex; gap:12px; align-items:center; }
+    .origin-box label { margin-right:4px; }
+  </style>
+</head>
+
+<body>
+<div id="page">
+  <nav class="fh5co-nav" role="navigation">
+    <div class="top-menu">
+      <div class="container">
+        <div class="row">
+          <div class="col-xs-2">
+            <div id="fh5co-logo"><a href="index.html">RTL-3D<span>.</span></a></div>
+          </div>
+          <div class="col-xs-10 text-right menu-1">
+            <ul>
+              <li><a href="index.html">Home</a></li>
+			  <li><a href="realtime.html">Real-time</a></li>
+              <li class="active"><a href="realtime_3d.html">Charge Distribution</a></li>
+              <li class="has-dropdown">
+                <a href="#">Monitor</a>
+                <ul class="dropdown">
+                  <li><a href="monitor-trigger.html">Daily Trigger Statistics</a></li>
+                  <li><a href="monitor-site-signal.html">Site-Recorded Waveform Output</a></li>
+                  <li><a href="monitor-site-status.html">Site status</a></li>
+                </ul>
+              </li>
+              <li class="btn-cta"><a href="#"><span>Login</span></a></li>
+            </ul>
+          </div>
+        </div>      
+      </div>
+    </div>
+  </nav>
+
+  <h2 style="text-align:center;">Lightning 3D Charge Distribution</h2>
+  <h4 style="text-align:center;">Current time <span id="datetime"></span></h4>
+
+  <div id="topbar">
+    <div>
+      <label for="serverFile">Select data (server):</label>
+      <select id="serverFile" disabled>
+        <option>Loading file list…</option>
+      </select>
+      <button id="loadServerBtn" class="btn" disabled>Load</button>
+    </div>
+    <div>
+      <label for="localFile">or Upload CSV:</label>
+      <input type="file" id="localFile" accept=".csv" />
+    </div>
+    <div class="origin-box">
+      <label>Origin (ENU→Geo):</label>
+      <label><input type="radio" name="origin" value="utem" checked> UTeM</label>
+      <label><input type="radio" name="origin" value="uitm"> UiTM Jasin</label>
+      <label><input type="radio" name="origin" value="mid"> Midpoint</label>
+    </div>
+    <div>
+      <label for="sizeScale">Point size:</label>
+      <input type="range" id="sizeScale" min="1" max="12" value="5" />
+    </div>
+    <div>
+      <span class="badge" id="activeFileBadge">No file loaded</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:black;"></span>Sensor</span>
+    <span><span class="dot" style="background:red;"></span>Negative charge</span>
+    <span><span class="dot" style="background:blue;"></span>Positive charge</span>
+    <span><span class="dot" style="background:#999;"></span>Zero</span>
+  </div>
+
+  <div id="viewer"></div>
+  <div class="hint">Tip: hold <b>right mouse</b> to tilt, <b>left</b> to pan, <b>wheel</b> to zoom. Click a point for time/charge.</div>
+
+  <footer id="fh5co-footer" role="contentinfo">
+    <div class="container">
+      <div class="row copyright">
+        <div class="col-md-12 text-center">
+          <p>
+            <small class="block">&copy;2025 <a href="https://rtlsatreps.utem.edu.my/" target="_blank"> RTL-3D KILAT</a>. All Rights Reserved.</small>
+            <small class="block">Designed by <a href="http://electrazcorp.com/?i=1" target="_blank">muhdhaziq.s</a></small>
+          </p>
+          <p>
+            <ul class="fh5co-social-icons">
+              <li><a href="https://www.instagram.com/satreps_rtl3d/"><i class="icon-instagram"></i></a></li>
+              <li><a href="https://www.facebook.com/rtl3d"><i class="icon-facebook"></i></a></li>
+            </ul>
+          </p>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<!-- (Optional) your existing JS libs -->
+<script src="js/jquery.min.js"></script>
+<script src="js/jquery.easing.1.3.js"></script>
+<script src="js/bootstrap.min.js"></script> <!-- fixed missing '<' -->
+<script src="js/jquery.waypoints.min.js"></script>
+<script src="js/jquery.flexslider-min.js"></script>
+<script src="js/main.js"></script>
+
+<script>
+(async () => {
+  // ---------------- Clock ----------------
+  function updateDateTime() {
+    const options = { weekday:'long', year:'numeric', month:'long', day:'numeric',
+                      hour:'2-digit', minute:'2-digit', second:'2-digit' };
+    document.getElementById('datetime').textContent = new Date().toLocaleString(undefined, options);
+  }
+  updateDateTime(); setInterval(updateDateTime, 1000);
+
+  // ---------------- Config ----------------
+  // 🔐 Paste your NEW Cesium ion token to enable real 3D terrain (don't commit tokens).
+  const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIzMTIxNTA4ZC0zMmMyLTQwNGMtOTUwOS05ZGM4MGYxM2NmYWQiLCJpZCI6MzQ4NTY0LCJpYXQiOjE3NTk5ODI1Nzh9.a-OxpSR-L9mz3OHMK5ZGTvZW3bmH0S6Yybmybjq3yek';
+  if (CESIUM_TOKEN) Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+
+  // Toggle extras
+  const ENABLE_OSM_BUILDINGS = true; // simple 3D buildings (lightweight)
+  // const ENABLE_PHOTOREALISTIC = false; // keep off unless you add a Google Maps API key
+
+  const ORIGINS = {
+    utem: { name: "UTeM", lat: 2.313906, lon: 102.318485 },
+    uitm: { name: "UiTM Jasin", lat: 2.228031, lon: 102.458427 }
+  };
+  ORIGINS.mid = {
+    name: "Midpoint",
+    lat: (ORIGINS.utem.lat + ORIGINS.uitm.lat) / 2,
+    lon: (ORIGINS.utem.lon + ORIGINS.uitm.lon) / 2
+  };
+  function selectedOrigin() {
+    const v = document.querySelector('input[name="origin"]:checked').value;
+    return ORIGINS[v];
+  }
+
+  // ENU (east, north, up) in km -> geodetic around small area (Melaka)
+  function enuKmToGeodetic(x_km, y_km, lat0_deg, lon0_deg) {
+    const lat0 = lat0_deg * Math.PI/180;
+    const mPerDegLat = 111132.92 - 559.82*Math.cos(2*lat0) + 1.175*Math.cos(4*lat0);
+    const mPerDegLon = (Math.PI/180) * 6378137 * Math.cos(lat0);
+    const dLatDeg = (y_km * 1000) / mPerDegLat;
+    const dLonDeg = (x_km * 1000) / mPerDegLon;
+    return { lat: lat0_deg + dLatDeg, lon: lon0_deg + dLonDeg };
+  }
+
+  // ---------------- Viewer (terrain & basemap) ----------------
+  async function makeViewer() {
+    const hasToken = !!CESIUM_TOKEN;
+
+    // Imagery: Cesium World Imagery (asset 2) if token; else OSM
+    const imageryProvider = hasToken
+      ? await Cesium.IonImageryProvider.fromAssetId(2)
+      : new Cesium.UrlTemplateImageryProvider({
+          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          credit: '© OpenStreetMap contributors'
+        });
+
+    // Terrain: Cesium World Terrain (asset 1) if token; else flat ellipsoid
+    const terrainProvider = hasToken
+      ? await Cesium.CesiumTerrainProvider.fromIonAssetId(1, {
+          requestVertexNormals: true,
+          requestWaterMask: true
+        })
+      : new Cesium.EllipsoidTerrainProvider();
+
+    const v = new Cesium.Viewer('viewer', {
+      imageryProvider,
+      terrainProvider,
+      baseLayerPicker: false,
+      geocoder: false,
+      animation: false,
+      timeline: false,
+      homeButton: true,
+      sceneModePicker: true,
+      navigationHelpButton: false,
+      selectionIndicator: true
+    });
+
+    // Terrain visuals
+    v.scene.globe.enableLighting = hasToken;
+    v.scene.globe.depthTestAgainstTerrain = true;
+
+    // ---- Light-brown terrain surface ----
+    const LIGHT_BROWN = '#bca974'; // warm earthy tone
+    v.scene.globe.baseColor = Cesium.Color.fromCssColorString(LIGHT_BROWN);
+    // Keep alpha lower if you want satellite to remain visible; higher alpha = stronger brown
+    v.scene.globe.material = Cesium.Material.fromType('Color', {
+      color: Cesium.Color.fromCssColorString(LIGHT_BROWN).withAlpha(0.85)
+    });
+
+    // ---- Enhance relief subtly ----
+    v.scene.globe.maximumScreenSpaceError = 1.5; // sharper terrain LOD
+    v.scene.globe.terrainExaggeration = 1.25;   // gentle exaggeration to make hills pop
+    v.scene.globe.terrainExaggerationRelativeHeight = 0;
+
+    // ---- Add lightweight 3D buildings (OSM) ----
+    if (hasToken && ENABLE_OSM_BUILDINGS) {
+      try {
+        const osmBuildings = await Cesium.createOsmBuildingsAsync(); // ion asset 96188
+        v.scene.primitives.add(osmBuildings);
+      } catch (err) {
+        console.warn('OSM Buildings unavailable:', err);
+      }
+    }
+
+    // ---- Optional: Photorealistic 3D buildings/trees (heavier) ----
+    // if (ENABLE_PHOTOREALISTIC) {
+    //   try {
+    //     Cesium.GoogleMaps.defaultApiKey = 'YOUR_GOOGLE_MAPS_API_KEY';
+    //     const gTiles = await Cesium.createGooglePhotorealistic3DTileset();
+    //     v.scene.primitives.add(gTiles);
+    //     gTiles.maximumScreenSpaceError = 2.5;
+    //   } catch (e) {
+    //     console.warn('Photorealistic 3D Tiles unavailable:', e);
+    //   }
+    // }
+
+    // Start over Peninsular Malaysia (W, S, E, N)
+    v.camera.flyTo({
+      destination: Cesium.Rectangle.fromDegrees(99.5, 1.0, 104.8, 7.0),
+      duration: 0
+    });
+
+    return v;
+  }
+
+  const viewer = await makeViewer();
+
+  // ---------------- Station pins ----------------
+  [ORIGINS.utem, ORIGINS.uitm].forEach(s => {
+    viewer.entities.add({
+      name: s.name,
+      position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat, 0),
+      point: { pixelSize: 8, color: Cesium.Color.BLACK },
+      label: {
+        text: s.name,
+        font: '14px sans-serif',
+        fillColor: Cesium.Color.BLACK,
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromAlpha(Cesium.Color.WHITE, 0.7),
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -12)
+      }
+    });
+  });
+
+  // ---------------- UI refs ----------------
+  const serverFileSel = document.getElementById('serverFile');
+  const serverLoadBtn = document.getElementById('loadServerBtn');
+  const localFileInput = document.getElementById('localFile');
+  const badge = document.getElementById('activeFileBadge');
+  const sizeScaleInput = document.getElementById('sizeScale');
+
+  // ---------------- Point primitives ----------------
+  let negPoints=null, posPoints=null, zeroPoints=null;
+  function clearPoints() {
+    if (negPoints) viewer.scene.primitives.remove(negPoints);
+    if (posPoints) viewer.scene.primitives.remove(posPoints);
+    if (zeroPoints) viewer.scene.primitives.remove(zeroPoints);
+    negPoints=posPoints=zeroPoints=null;
+  }
+  function makeCollection(color) {
+    const col = new Cesium.PointPrimitiveCollection();
+    col._rtl3d_color = color; return col;
+  }
+  sizeScaleInput.addEventListener('input', () => {
+    const px = Number(sizeScaleInput.value);
+    [negPoints,posPoints,zeroPoints].forEach(col => {
+      if (!col) return; for (let i=0;i<col.length;i++) col.get(i).pixelSize = px;
+    });
+  });
+
+  function formatTime(t) {
+    const n = Number(t);
+    if (isFinite(n)) {
+      const ms = n > 1e12 ? n : (n > 1e10 ? n : n*1000);
+      const d = new Date(ms); if (!isNaN(d)) return d.toISOString();
+    }
+    return String(t);
+  }
+  function detectGeodetic(rows) {
+    if (!rows.length) return false;
+    const r = rows.find(rr => rr && (('lon' in rr) || ('longitude' in rr)) && (('lat' in rr) || ('latitude' in rr)));
+    return !!r;
+  }
+
+  function draw3D(rows, titleText) {
+    console.log('[RTL-3D] draw3D rows:', rows.length, 'title:', titleText);
+    clearPoints();
+    const px = Number(sizeScaleInput.value);
+    negPoints = makeCollection(Cesium.Color.RED);
+    posPoints = makeCollection(Cesium.Color.BLUE);
+    zeroPoints = makeCollection(Cesium.Color.GRAY);
+
+    const isGeodetic = detectGeodetic(rows);
+    const origin = selectedOrigin();
+
+    let minLat=+Infinity, minLon=+Infinity, maxLat=-Infinity, maxLon=-Infinity;
+    let validCount=0;
+
+    for (const r of rows) {
+      if (!r) continue;
+      const q = Number(r.deposited_charge);
+      if (!isFinite(q)) continue;
+
+      let lon, lat, alt_m;
+
+      if (isGeodetic) {
+        lon = Number(r.lon ?? r.longitude);
+        lat = Number(r.lat ?? r.latitude);
+        const zVal = Number(r.z);
+        alt_m = Math.abs(zVal) > 200 ? zVal : zVal*1000; // small z -> km
+      } else {
+        const x_km = Number(r.x), y_km = Number(r.y), z_km = Number(r.z);
+        if (!isFinite(x_km) || !isFinite(y_km) || !isFinite(z_km)) continue;
+        const geo = enuKmToGeodetic(x_km, y_km, origin.lat, origin.lon);
+        lon = geo.lon; lat = geo.lat; alt_m = z_km * 1000;
+      }
+
+      if (!isFinite(lon) || !isFinite(lat) || !isFinite(alt_m)) continue;
+
+      const pos = Cesium.Cartesian3.fromDegrees(lon, lat, alt_m);
+      const text = `time: ${formatTime(r.time)}\ncharge: ${q}\nlon,lat,alt(m): ${lon.toFixed(6)}, ${lat.toFixed(6)}, ${Math.round(alt_m)}`;
+      const tgt = q < 0 ? negPoints : (q > 0 ? posPoints : zeroPoints);
+      const p = tgt.add({ position: pos, color: tgt._rtl3d_color, pixelSize: px, disableDepthTestDistance: Number.POSITIVE_INFINITY });
+      p._rtl3d_info = { text };
+
+      minLat = Math.min(minLat, lat); minLon = Math.min(minLon, lon);
+      maxLat = Math.max(maxLat, lat); maxLon = Math.max(maxLon, lon);
+      validCount++;
+    }
+
+    viewer.scene.primitives.add(negPoints);
+    viewer.scene.primitives.add(posPoints);
+    viewer.scene.primitives.add(zeroPoints);
+    badge.textContent = 'Loaded: ' + titleText;
+
+    if (validCount > 0) {
+      const rect = Cesium.Rectangle.fromDegrees(minLon, minLat, maxLon, maxLat);
+      viewer.camera.flyTo({ destination: rect, duration: 1.2 });
+    } else {
+      alert('No valid points to plot. Expect columns: time,x,y,z,deposited_charge (x,y,z in km).');
+    }
+  }
+
+  // Click info
+  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  handler.setInputAction(function (movement) {
+    const picked = viewer.scene.pick(movement.position);
+    if (Cesium.defined(picked) && picked.primitive && picked.primitive._rtl3d_info) {
+      const info = picked.primitive._rtl3d_info.text;
+      viewer.selectedEntity = new Cesium.Entity({ name: 'Point info', description: info.replace(/\n/g, '<br>') });
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  // CSV parsing
+  function parseCSV(text) {
+    return new Promise((resolve, reject) => {
+      Papa.parse(text, {
+        header: true, dynamicTyping: true, skipEmptyLines: true,
+        complete: res => resolve(res.data || []),
+        error: err => reject(err)
+      });
+    });
+  }
+
+  // Server file list
+  async function tryLoadFileList() {
+    try {
+      const res = await fetch('/3D_txt/filelist.json', { cache: 'no-cache' });
+      if (!res.ok) throw 0;
+      const list = await res.json();
+      serverFileSel.innerHTML = '';
+      for (const fn of list) {
+        const opt = document.createElement('option'); opt.value = fn; opt.textContent = fn;
+        serverFileSel.appendChild(opt);
+      }
+      serverFileSel.disabled = false; serverLoadBtn.disabled = false;
+    } catch (e) {
+      serverFileSel.innerHTML = '<option>No server file list (use Upload CSV)</option>';
+      serverFileSel.disabled = true; serverLoadBtn.disabled = true;
+    }
+  }
+  async function loadServerSelected() {
+    const fname = serverFileSel.value; if (!fname) return;
+    const url = '/3D_txt/' + fname;
+    const res = await fetch(url, { cache:'no-cache' });
+    if (!res.ok) { alert('Failed to load: ' + fname); return; }
+    const text = await res.text();
+    const rows = await parseCSV(text);
+    window._lastRows = rows; window._lastTitle = fname;
+    draw3D(rows, fname);
+  }
+
+  serverLoadBtn.addEventListener('click', loadServerSelected);
+
+  localFileInput.addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const rows = await parseCSV(text);
+    window._lastRows = rows; window._lastTitle = file.name;
+    draw3D(rows, file.name);
+  });
+
+  // Reproject on origin change (without reloading)
+  document.querySelectorAll('input[name="origin"]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (window._lastRows) draw3D(window._lastRows, window._lastTitle || 'data');
+    });
+  });
+
+  // Init
+  await tryLoadFileList();
+})();
+</script>
+</body>
+</html>
