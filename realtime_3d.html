@@ -422,7 +422,7 @@
   }
   async function loadServerSelected() {
     const fname = serverFileSel.value; if (!fname) return;
-    const url = '/3D_txt/' + fname;
+    const url = './3D_txt/' + fname;
     const res = await fetch(url, { cache:'no-cache' });
     if (!res.ok) { alert('Failed to load: ' + fname); return; }
     const text = await res.text();
