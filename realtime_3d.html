@@ -386,8 +386,8 @@
       `
     });
 
-    // “Mast” from terrain to marker for clarity
-    viewer.entities.add({
+    // “Mast” from terrain to marker for clarity (tagged to ignore in picking)
+    const mast = viewer.entities.add({
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArrayHeights([
           s.lon, s.lat, 0,
@@ -398,6 +398,7 @@
         clampToGround: false
       }
     });
+    mast._rtl3d_isMast = true; // tag as overlay
   });
 
   // ---------------- UI refs ----------------
@@ -736,29 +737,29 @@
 
     // Vertical lines (constant lon)
     for (let lon = startLon; lon <= e + 1e-9; lon += stepDegLon) {
-      gridEntities.push(
-        viewer.entities.add({
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray([lon, s, lon, n]),
-            width,
-            material: lineColor,
-            clampToGround: true
-          }
-        })
-      );
+      const ent = viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray([lon, s, lon, n]),
+          width,
+          material: lineColor,
+          clampToGround: true
+        }
+      });
+      ent._rtl3d_isGrid = true; // tag as overlay
+      gridEntities.push(ent);
     }
     // Horizontal lines (constant lat)
     for (let lat = startLat; lat <= n + 1e-9; lat += stepDegLat) {
-      gridEntities.push(
-        viewer.entities.add({
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray([w, lat, e, lat]),
-            width,
-            material: lineColor,
-            clampToGround: true
-          }
-        })
-      );
+      const ent = viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray([w, lat, e, lat]),
+          width,
+          material: lineColor,
+          clampToGround: true
+        }
+      });
+      ent._rtl3d_isGrid = true; // tag as overlay
+      gridEntities.push(ent);
     }
 
     // Update tiny legend (|—X km—|)
@@ -779,6 +780,30 @@
   // Initial draw
   scheduleGridUpdate(0);
 
+  // ---------------- Click info (drill pick & ignore overlays) ----------------
+  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  handler.setInputAction(function (movement) {
+    const hits = viewer.scene.drillPick(movement.position) || [];
+    let infoText = null;
+
+    for (const h of hits) {
+      // Prefer our PointPrimitive (holds _rtl3d_info)
+      if (h && h.primitive && h.primitive._rtl3d_info) {
+        infoText = h.primitive._rtl3d_info.text;
+        break;
+      }
+      // Skip overlay entities (grid lines, masts)
+      const ent = h && (h.id || h.entity || h.primitive?.id);
+      if (ent && (ent._rtl3d_isGrid || ent._rtl3d_isMast)) continue;
+    }
+
+    if (infoText) {
+      viewer.selectedEntity = new Cesium.Entity({
+        name: 'Point info',
+        description: infoText.replace(/\n/g, '<br>')
+      });
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   // =============== CSV parsing & loading ===============
   function parseCSV(text) {
