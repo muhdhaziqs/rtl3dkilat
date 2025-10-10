@@ -35,64 +35,52 @@
     .hint { text-align:center; color:#666; margin-top:6px; }
     .btn { cursor:pointer; }
 
-    .origin-box { display:flex; gap:12px; align-items:center; }
-    .origin-box label { margin-right:4px; }
-
     /* Compact animation control overlay (bottom-left) */
     #animBar {
-      position: absolute;
-      left: 10px;
-      bottom: 10px;
-      z-index: 15;
-      background: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(0, 0, 0, 0.25);
-      border-radius: 6px;
-      padding: 4px 6px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-      justify-content: flex-start;
-      font-size: 11px;
-      line-height: 1.2;
-      backdrop-filter: blur(3px);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-      max-width: 320px;
+      position: absolute; left: 10px; bottom: 10px; z-index: 15;
+      background: rgba(255, 255, 255, 0.8); border: 1px solid rgba(0, 0, 0, 0.25);
+      border-radius: 6px; padding: 4px 6px; display: flex; flex-wrap: wrap; gap: 4px;
+      align-items: center; justify-content: flex-start; font-size: 11px; line-height: 1.2;
+      backdrop-filter: blur(3px); box-shadow: 0 1px 4px rgba(0,0,0,0.2); max-width: 320px;
     }
     #animBar .group { display: flex; align-items: center; gap: 4px; }
-    #animBar button {
-      border: 1px solid #aaa;
-      background: #f7f7f7;
-      padding: 2px 5px;
-      border-radius: 4px;
-      font-size: 11px;
-      line-height: 1.1;
-      cursor: pointer;
-    }
+    #animBar button { border: 1px solid #aaa; background: #f7f7f7; padding: 2px 5px; border-radius: 4px; font-size: 11px; line-height: 1.1; cursor: pointer; }
     #animBar button.active { border-color: #333; }
     #animBar input[type="range"] { width: 120px; height: 4px; }
     #timeLabel { min-width: 90px; text-align: center; font-family: monospace; font-size: 10px; }
-    @media (max-width: 768px) {
-      #animBar { left: 6px; bottom: 6px; font-size: 10px; padding: 3px 5px; max-width: 280px; }
-      #animBar input[type="range"] { width: 100px; }
-    }
 
-    /* Legend overlay on the map (top-left) */
+    /* Legend overlay (top-left) */
     #legendOverlay {
       position:absolute; left:10px; top:10px; z-index:10;
-      background:rgba(255,255,255,0.85);
-      border:1px solid rgba(0,0,0,0.2);
-      border-radius:8px;
-      padding:8px 10px;
-      font-size:12px;
-      backdrop-filter: blur(2px);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      max-width: 240px;
+      background:rgba(255,255,255,0.85); border:1px solid rgba(0,0,0,0.2);
+      border-radius:8px; padding:8px 10px; font-size:12px; backdrop-filter: blur(2px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15); max-width: 260px;
     }
     #legendOverlay h4 { margin:0 0 6px; font-size:13px; font-weight:700; }
     .legend-row { display:flex; align-items:center; gap:8px; margin:2px 0; }
     .legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; border:1px solid #00000022; }
     .legend-note { margin-top:6px; color:#333; font-size:11px; }
+
+    /* "View plotting area" button (top-right under Cesium Home) */
+    #zoomPlotBtn {
+      position: absolute; right: 10px; top: 64px; z-index: 15;
+      background: rgba(255,255,255,0.9); border: 1px solid rgba(0,0,0,0.25);
+      border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+    #zoomPlotBtn:hover { background: rgba(255,255,255,0.95); }
+
+    /* Grid info chip (top-left, inside legend) */
+    #gridChip {
+      display:inline-block; margin-top:6px; padding:2px 6px; border-radius:6px;
+      background:rgba(0,0,0,0.05); font-family:monospace;
+    }
+
+    @media (max-width: 768px) {
+      #animBar { left: 6px; bottom: 6px; font-size: 10px; padding: 3px 5px; max-width: 280px; }
+      #animBar input[type="range"] { width: 100px; }
+      #zoomPlotBtn { top: 60px; right: 6px; }
+    }
   </style>
 </head>
 
@@ -162,7 +150,11 @@
       <div class="legend-row"><span class="legend-dot" style="background:blue;"></span> Positive charge</div>
       <div class="legend-row"><span class="legend-dot" style="background:#999;"></span> Zero</div>
       <div class="legend-note">✕ = initiation point</div>
+      <div id="gridChip">Grid: —</div>
     </div>
+
+    <!-- “View plotting area” button -->
+    <button id="zoomPlotBtn" title="Zoom to plotting area">View plotting area</button>
 
     <!-- Cesium viewer -->
     <div id="viewer"></div>
@@ -364,10 +356,7 @@
 
   // ---------------- Station pins (raised above terrain) ----------------
   STATIONS.forEach(s => {
-    // Elevation above ground + small extra so it floats visibly
     const altAGL = (Number(s.elev_m) || 0) + 5;
-
-    // Station marker + label
     viewer.entities.add({
       name: s.name,
       position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat, altAGL),
@@ -417,6 +406,8 @@
   const localFileInput = document.getElementById('localFile');
   const badge = document.getElementById('activeFileBadge');
   const sizeScaleInput = document.getElementById('sizeScale');
+  const gridChip = document.getElementById('gridChip');
+  const zoomPlotBtn = document.getElementById('zoomPlotBtn');
 
   // Animation refs
   const playPauseBtn = document.getElementById('playPauseBtn');
@@ -581,6 +572,9 @@
     playPauseBtn.textContent = '⏸ Pause';
     anim.lastFrameTs = 0;
     requestAnimationFrame(step);
+
+    // Update grid for the new area
+    scheduleGridUpdate();
   }
 
   function step(ts) {
@@ -653,51 +647,140 @@
   resetBtn.addEventListener('click', resetAnimation);
   showAllBtn.addEventListener('click', showAll);
 
-  // scrubber
-  let scrubbing = false;
-  progress.addEventListener('input', () => {
-    if (!anim.rowsSorted.length) return;
-    scrubbing = true;
-    const frac = Number(progress.value) / 1000;
-    const targetAbsMs = anim.startMs + frac*(anim.endMs - anim.startMs);
+  // =============== View plotting area button ===============
+  function getPlottingRectangle() {
+    // Prefer current data bounds; fallback to station extent; fallback to current view
+    if (anim && anim.boundsRect) return anim.boundsRect;
+    const sRect = stationsRectangle();
+    if (sRect) return sRect;
+    const viewRect = viewer.camera.computeViewRectangle();
+    return viewRect || Cesium.Rectangle.fromDegrees(99.5, 1.0, 104.8, 7.0);
+  }
+  function zoomToPlottingArea() {
+    const rect = getPlottingRectangle();
+    viewer.camera.flyTo({ destination: rect, duration: 1.0 });
+    scheduleGridUpdate();
+  }
+  zoomPlotBtn.addEventListener('click', zoomToPlottingArea);
 
-    clearPoints();
-    negPoints = makeCollection(Cesium.Color.RED);
-    posPoints = makeCollection(Cesium.Color.BLUE);
-    zeroPoints = makeCollection(Cesium.Color.GRAY);
-    viewer.scene.primitives.add(negPoints);
-    viewer.scene.primitives.add(posPoints);
-    viewer.scene.primitives.add(zeroPoints);
-    if (anim.firstMarker == null && anim.rowsSorted.length) {
-      const fp = anim.rowsSorted[0];
-      anim.firstMarker = viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(fp.lon, fp.lat, fp.alt_m),
-        label: { text: '✕', font: 'bold 24px sans-serif',
-                 fillColor: Cesium.Color.RED, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-                 style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -12) }
-      });
-    }
-    let i=0;
-    while (i < anim.rowsSorted.length && anim.rowsSorted[i].timeMs <= targetAbsMs) {
-      addPoint(anim.rowsSorted[i]); i++;
-    }
-    anim.idx = i;
-    anim.simMs = targetAbsMs - anim.startMs;
-    updateTimeLabel(targetAbsMs);
-  });
-  progress.addEventListener('change', () => { scrubbing = false; });
+  // =============== Adaptive grid overlay ===============
+  // Draw subtle km grid that adjusts with zoom. Implemented with Entity polylines.
 
-  // ---------------- Click info ----------------
-  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-  handler.setInputAction(function (movement) {
-    const picked = viewer.scene.pick(movement.position);
-    if (Cesium.defined(picked) && picked.primitive && picked.primitive._rtl3d_info) {
-      const info = picked.primitive._rtl3d_info.text;
-      viewer.selectedEntity = new Cesium.Entity({ name: 'Point info', description: info.replace(/\n/g, '<br>') });
-    }
-  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  let gridEntities = [];
 
-  // ---------------- CSV parsing & loading ----------------
+  // Remove all grid line entities
+  function clearGrid() {
+    for (const e of gridEntities) viewer.entities.remove(e);
+    gridEntities.length = 0;
+  }
+
+  // WGS84: meters per degree at a given latitude (uses degrees input)
+  function metersPerDegree(latDeg) {
+    const lat = Cesium.Math.toRadians(latDeg);
+    const mPerDegLat = 111132.92 - 559.82 * Math.cos(2 * lat) + 1.175 * Math.cos(4 * lat);
+    const mPerDegLon = (Math.PI / 180) * 6378137 * Math.cos(lat);
+    return { mPerDegLat, mPerDegLon };
+  }
+
+  // Pick a nice grid step based on camera height (meters)
+  function chooseGridStepKm(heightMeters) {
+    if (heightMeters > 300000) return 50;
+    if (heightMeters > 120000) return 20;
+    if (heightMeters > 60000)  return 10;
+    if (heightMeters > 20000)  return 5;
+    if (heightMeters > 6000)   return 2;
+    if (heightMeters > 2500)   return 1;
+    return 0.5; // very close
+  }
+
+  function computeViewRectangleSafe() {
+    let rect = viewer.camera.computeViewRectangle();
+    if (!rect) rect = getPlottingRectangle(); // fallback
+    return rect;
+  }
+
+  function updateGrid() {
+    clearGrid();
+
+    const rectRad = computeViewRectangleSafe();
+    // Cesium rectangles are in radians; convert to degrees for spacing math
+    const south = Cesium.Math.toDegrees(rectRad.south);
+    const north = Cesium.Math.toDegrees(rectRad.north);
+    const west  = Cesium.Math.toDegrees(rectRad.west);
+    const east  = Cesium.Math.toDegrees(rectRad.east);
+
+    // Center lat for meters/degree
+    const centerLatDeg = (north + south) / 2;
+
+    // Camera height as a proxy for zoom
+    const height = viewer.camera.positionCartographic.height;
+    const stepKm = chooseGridStepKm(height);
+
+    // Convert desired km spacing to degrees at this latitude
+    const { mPerDegLat, mPerDegLon } = metersPerDegree(centerLatDeg);
+    const stepDegLat = (stepKm * 1000) / mPerDegLat;
+    const stepDegLon = (stepKm * 1000) / mPerDegLon;
+
+    // Pad bounds so lines extend past edges
+    const padLat = (north - south) * 0.1;
+    const padLon = (east - west) * 0.1;
+    const s = south - padLat, n = north + padLat;
+    const w = west  - padLon, e = east  + padLon;
+
+    // Snap starts to the grid
+    const startLat = Math.floor(s / stepDegLat) * stepDegLat;
+    const startLon = Math.floor(w / stepDegLon) * stepDegLon;
+
+    const lineColor = Cesium.Color.BLACK.withAlpha(0.25);
+    const width = 1;
+
+    // Vertical lines (constant lon)
+    for (let lon = startLon; lon <= e + 1e-9; lon += stepDegLon) {
+      gridEntities.push(
+        viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray([lon, s, lon, n]),
+            width,
+            material: lineColor,
+            clampToGround: true
+          }
+        })
+      );
+    }
+    // Horizontal lines (constant lat)
+    for (let lat = startLat; lat <= n + 1e-9; lat += stepDegLat) {
+      gridEntities.push(
+        viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray([w, lat, e, lat]),
+            width,
+            material: lineColor,
+            clampToGround: true
+          }
+        })
+      );
+    }
+
+    // Update tiny legend (|—X km—|)
+    gridChip.textContent = `Grid: ${stepKm} km   (|—${stepKm} km—|)`;
+  }
+
+  // Throttle grid updates while interacting
+  let gridTimer = null;
+  function scheduleGridUpdate(delay = 120) {
+    if (gridTimer) clearTimeout(gridTimer);
+    gridTimer = setTimeout(updateGrid, delay);
+  }
+
+  // Update on move end & on morph
+  viewer.scene.camera.moveEnd.addEventListener(() => scheduleGridUpdate(80));
+  viewer.scene.morphComplete.addEventListener(() => scheduleGridUpdate(0));
+
+  // Initial draw
+  scheduleGridUpdate(0);
+
+
+  // =============== CSV parsing & loading ===============
   function parseCSV(text) {
     return new Promise((resolve, reject) => {
       Papa.parse(text, {
