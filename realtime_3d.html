@@ -877,5 +877,13 @@
   setSpeed(0.1);
 })();
 </script>
+
+<!-- 🔒 Disable right-click context menu across the page -->
+<script>
+  document.addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+  }, { capture: true });
+</script>
+
 </body>
 </html>
